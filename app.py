@@ -51,7 +51,7 @@ async def lifespan(app: FastAPI):
         # Не прерываем запуск, но логируем ошибку
     
     yield
-    # Shutdown
+    # Shutdow
     # Cleanup code here
 
 app = FastAPI(title="Piper TTS Service", lifespan=lifespan)
