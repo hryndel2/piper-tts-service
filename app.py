@@ -7,7 +7,6 @@ import wave
 from piper import PiperVoice
 import os
 import logging
-import requests
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -21,14 +20,16 @@ def download_voice_model():
     voice_path = "ru_RU-irina-medium.onnx"
     
     if not os.path.exists(voice_path):
-        logger.info("Скачиваем голосовую модель...")
+        logger.info("Скачиваем русскую голосовую модель...")
         try:
-            # Скачиваем через piper
-            os.system("python -m piper.download_voices en_US-lessac-medium")
-            logger.info("✓ Голосовая модель скачана")
+            # Скачиваем РУССКУЮ модель
+            os.system("python -m piper.download_voices ru_RU-irina-medium")
+            logger.info("✓ Русская голосовая модель скачана")
+            return True
         except Exception as e:
             logger.error(f"Ошибка скачивания голоса: {e}")
             return False
+    logger.info("Голосовая модель уже существует")
     return True
 
 @asynccontextmanager
@@ -51,8 +52,7 @@ async def lifespan(app: FastAPI):
         # Не прерываем запуск, но логируем ошибку
     
     yield
-    # Shutdow
-    # Cleanup code here
+    # Shutdown
 
 app = FastAPI(title="Piper TTS Service", lifespan=lifespan)
 
@@ -82,14 +82,11 @@ async def health_check():
     }
 
 @app.get("/synthesize")
-@app.post("/synthesize")
 async def synthesize_text(
-    text: str = Query(..., description="Текст для синтеза"),
-    speed: float = Query(1.0, description="Скорость речи (0.5-2.0)"),
-    volume: float = Query(1.0, description="Громкость (0.0-2.0)")
+    text: str = Query(..., description="Текст для синтеза")
 ):
     """
-    Синтез речи из текста - поддерживает GET и POST
+    Синтез речи из текста
     """
     if not voice:
         raise HTTPException(status_code=503, detail="Голос не загружен")
@@ -118,7 +115,6 @@ async def synthesize_text(
             media_type="audio/wav",
             headers={
                 "Content-Disposition": "inline; filename=speech.wav",
-                "X-Text-Length": str(len(text)),
                 "Access-Control-Expose-Headers": "*"
             }
         )
@@ -127,39 +123,6 @@ async def synthesize_text(
         logger.error(f"Ошибка синтеза: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка синтеза: {str(e)}")
 
-@app.get("/synthesize-base64")
-async def synthesize_base64(
-    text: str = Query(..., description="Текст для синтеза")
-):
-    """Возвращает аудио в base64"""
-    if not voice:
-        raise HTTPException(status_code=503, detail="Голос не загружен")
-    
-    try:
-        if not text:
-            raise HTTPException(status_code=400, detail="Текст не может быть пустым")
-        
-        # Создаем аудио в памяти
-        wav_io = io.BytesIO()
-        with wave.open(wav_io, 'wb') as wav_file:
-            voice.synthesize_wav(text, wav_file)
-        
-        wav_io.seek(0)
-        audio_data = wav_io.getvalue()
-        
-        import base64
-        audio_base64 = base64.b64encode(audio_data).decode('utf-8')
-        
-        return {
-            "audio": f"data:audio/wav;base64,{audio_base64}",
-            "text": text,
-            "length": len(audio_data)
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Для Railway важно использовать порт из переменной окружения
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
